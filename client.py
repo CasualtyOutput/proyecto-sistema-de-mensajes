@@ -22,7 +22,7 @@ if(hostOrJoin == "2"):
 
 elif (hostOrJoin == "1"):
     print("Your room ID is:", roomID)
-    s.bind((host,port))
+    s.bind((hostName,port))
     s.listen(5)
     name = input("Write your name: ")
     
