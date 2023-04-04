@@ -1,7 +1,9 @@
 import socket
-import sys
+import threading
 
-
+clients = []
+names = []
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 name = input("Write your name: ")
 
 def encode(msg) : 
@@ -15,6 +17,70 @@ def decode(ascii_to_bytes) :
     msg = ''.join([chr(code) for code in bytes_to_ascii])
 
     return msg
+  
+def broadcast(message):
+    for client in clients:
+        client.send(message)
+    print(message.decode('utf-8'))
+    
+def manualBroadcast():
+    while True:
+        message = '{}: {}'.format(name, input(''))
+        for client in clients:
+            client.send(message.encode('utf-8'))
+
+def handle(client):
+    while True:
+        try:
+            message = client.recv(2048)
+            broadcast(message)
+        except:
+            index = clients.index(client)
+            clients.remove(client)
+            client.close()
+            nickname = names[index]
+            broadcast(f'{nickname} left the chat!'.encode("utf-8"))
+            names.remove(nickname)
+            break
+        
+def receiveServer(server):
+    while True:
+        # Accept Connection
+        client, address = server.accept()
+
+        # Request And Store Nickname
+        client.send('NICK'.encode('utf-8'))
+        nickname = client.recv(2048).decode('utf-8')
+        names.append(nickname)
+        clients.append(client)
+
+        # Print And Broadcast Nickname
+        client.send("Welcome to {}'s server!".format(name).encode('utf-8'))
+        broadcast("{} joined".format(nickname).encode('utf-8'))
+        # Start Handling Thread For Client
+        thread = threading.Thread(target=handle, args=(client,))
+        thread.start()
+        
+def receiveClient(client):
+    while True:
+        try:
+            # Receive Message From Server
+            # If 'NICK' Send Nickname
+            message = client.recv(2048).decode('utf-8')
+            if message == 'NICK':
+                client.send(name.encode('utf-8'))
+            else:
+                print(message)
+        except:
+            # Close Connection When Error
+            print("An error occured!")
+            client.close()
+            break
+        
+def write(client):
+    while True:
+        message = '{}: {}'.format(name, input(''))
+        client.send(message.encode('utf-8'))
 
 validChoice = False
 print("Do you want to [H]ost or [J]oin a chat room?")
@@ -30,51 +96,30 @@ if(hostOrClient == "j"):
     validChoice = False
     while(not validChoice):
         roomID = input("Insert chat room ID: ")
-        clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
         hostName = socket.gethostname()
         hostIP = socket.gethostbyname(hostName)
         localIP = ".".join(hostIP.split(".")[:-1])
     
-        if(clientsocket.connect_ex((localIP + "." + roomID, 8080)) == 0):
+        if(s.connect_ex((localIP + "." + roomID, 8080)) == 0):
             validChoice = True
         else:
             print("Chat room not found")
-        
-    msg = decode(clientsocket.recv(1024))
-    print(name + ": " + str(msg))
-
-    while True:
-        msg = input(name + ": ")
-        clientsocket.send(bytes(name + ": " + msg, "utf-8"))
-
-        msg = decode(clientsocket.recv(1024))
-
-        print(str(msg))
-
-        if msg.lower() == "!exit":
-            break
+    
+    receive_thread = threading.Thread(target=receiveClient, args=(s,))
+    receive_thread.start()
+    
+    write_thread = threading.Thread(target=write, args=(s,))
+    write_thread.start()
+    
         
 elif(hostOrClient == "h"):
     print("Your room ID is:", socket.gethostbyname(socket.gethostname()).split(".").pop(-1))
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     hostName = socket.gethostname()
-    s.bind((hostName, 8080))
-    s.listen(1)
-
-    print("Waiting for any incoming connections ...")
-    clientsocket, address = s.accept()
-
-    print(f"Connection from {address} has been established!")
-    clientsocket.send(encode(f"Welcome to {name}'s chat room!"))
+    hostIP = socket.gethostbyname(hostName)
+    s.bind((hostIP, 8080))
+    s.listen()
     
-
-    while True:
-        msg = clientsocket.recv(1024).decode("utf-8")
-        if not msg:
-            break
-        print(str(msg))
-        msg = input(name + ": ")
-        clientsocket.send(encode(name + ": " + msg))
-
-clientsocket.close()
+    thread = threading.Thread(target=manualBroadcast)
+    thread.start()
+    receiveServer(s)
