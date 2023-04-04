@@ -1,6 +1,7 @@
 import socket
 import sys
 
+
 name = input("Write your name: ")
 
 def encode(msg) : 
@@ -15,15 +16,37 @@ def decode(ascii_to_bytes) :
 
     return msg
 
-if(len(sys.argv) > 1): 
-    clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientsocket.connect((sys.argv[1], 8080))
+validChoice = False
+print("Do you want to [H]ost or [J]oin a chat room?")
+while(not validChoice):
+    hostOrClient = input().lower()
+    if(hostOrClient == "j" or hostOrClient == "h"):
+        validChoice = True
+    else:
+        print("Only input either <H> or <J>")
+           
+
+if(hostOrClient == "j"): 
+    validChoice = False
+    while(not validChoice):
+        roomID = input("Insert chat room ID: ")
+        clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        hostName = socket.gethostname()
+        hostIP = socket.gethostbyname(hostName)
+        localIP = ".".join(hostIP.split(".")[:-1])
+    
+        if(clientsocket.connect_ex((localIP + "." + roomID, 8080)) == 0):
+            validChoice = True
+        else:
+            print("Chat room not found")
+        
     msg = decode(clientsocket.recv(1024))
     print(name + ": " + str(msg))
 
     while True:
         msg = input(name + ": ")
-        clientsocket.send(bytes(name + ": " +msg, "utf-8"))
+        clientsocket.send(bytes(name + ": " + msg, "utf-8"))
 
         msg = decode(clientsocket.recv(1024))
 
@@ -31,7 +54,9 @@ if(len(sys.argv) > 1):
 
         if msg.lower() == "!exit":
             break
-else:
+        
+elif(hostOrClient == "h"):
+    print("Your room ID is:", socket.gethostbyname(socket.gethostname()).split(".").pop(-1))
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     hostName = socket.gethostname()
     s.bind((hostName, 8080))
@@ -42,6 +67,7 @@ else:
 
     print(f"Connection from {address} has been established!")
     clientsocket.send(encode(f"Welcome to {name}'s chat room!"))
+    
 
     while True:
         msg = clientsocket.recv(1024).decode("utf-8")
